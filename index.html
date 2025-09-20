@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Juego Multijugador Phaser</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
+    <style>
+      body { margin: 0; background: #0b0d12; font-family: system-ui, sans-serif; }
+      #ui {
+        position: absolute; inset: 0; display: grid; place-items: center;
+        background: rgba(0,0,0,.6); z-index: 10;
+      }
+      #card {
+        background: #121620; color: #e6edf3; padding: 20px; border-radius: 12px;
+        width: min(90vw, 380px); box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      }
+      #card h1 { margin: 0 0 10px; font-size: 20px; }
+      #card label { display:block; margin: 10px 0 6px; font-size: 14px; }
+      #card select, #card button {
+        width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #2b3142;
+        background:#0f1420; color:#e6edf3;
+      }
+      #card button { margin-top: 12px; cursor: pointer; background: #1f6feb; border: none; }
+      #hud {
+        position: absolute; top: 10px; left: 10px; z-index: 5; color: #e6edf3;
+        background: rgba(0,0,0,.35); padding: 6px 10px; border-radius: 8px; font-size: 12px;
+      }
+      .hpbar {
+        position: absolute; width: 40px; height: 6px; background: #3a3f4b; border-radius: 3px;
+        transform: translate(-20px, -34px);
+      }
+      .hpfill {
+        height: 100%; background: #30d158; border-radius: 3px 0 0 3px; width: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- UI de selección de personaje -->
+    <div id="ui">
+      <div id="card">
+        <h1>Elige tu personaje</h1>
+        <label for="character">Personaje</label>
+        <select id="character">
+          <option value="rock">The Rock</option>
+          <option value="undertaker">Undertaker</option>
+          <option value="shamous">Shamous</option>
+          <option value="cena">John Cena</option>
+          <option value="edge">Edge</option>
+          <option value="tripleh">TripleH</option>
+        </select>
+        <button id="startBtn">Entrar a la arena</button>
+      </div>
+    </div>
+
+    <div id="hud">WASD / Flechas para moverte · Barra espaciadora para atacar</div>
+
+    <script>
+      let socket;
+      let playerId;
+      let myLives = 2;
+      const players = {};
+      const hud = document.getElementById("hud"); // "WASD..." ya existe
+function renderHUD() {
+  hud.textContent = `Vidas: ${myLives} · WASD/Flechas para moverte · Barra para atacar`;
+}
+      const hpBars = {}; // id -> {wrapper, fill}
+      let arena = { width: 800, height: 600, padding: 20 };
+
+      class GameScene extends Phaser.Scene {
+        constructor() { super("GameScene"); }
+
+        preload() {
+          // Sprites (coloca tus archivos en /assets/)
+         // this.load.image("knight", "assets/knight.png");
+          //this.load.image("wizard", "assets/wizard.png");
+          //this.load.image("archer", "assets/archer.png");
+
+            this.load.image("rock", "assets/rock.png");
+            this.load.image("cena", "assets/cena.png");
+            this.load.image("edge", "assets/edge.png");
+            this.load.image("shamous", "assets/sheamus.png");
+            this.load.image("bayley", "assets/bayley.png");
+            this.load.image("undertaker", "assets/undertaker.png");
+            this.load.image("tripleh", "assets/tripleh.png");
+
+            // Música y efectos
+            this.load.audio("bgm", "assets/background.mp3");
+            this.load.audio("attack", "assets/attack.wav");
+            this.load.audio("death", "assets/death.wav");
+            this.load.image("fondo", "assets/background.png");
+        }
+
+        create() {
+
+          // Agregar fondo que cubra toda la pantalla
+  this.bg = this.add.image(0, 0, "fondo").setOrigin(0);
+  this.bg.setDisplaySize(this.sys.game.config.width, this.sys.game.config.height);
+  
+          // Fondo simple
+          this.cameras.main.setBackgroundColor("#0b0d12");
+
+          // Música
+          const bgm = this.sound.add("bgm", { loop: true, volume: 0.35 });
+          bgm.play();
+
+          // Efectos
+  this.sfxAttack = this.sound.add("attack", { volume: 0.7 });
+  this.sfxDeath = this.sound.add("death", { volume: 0.9 });
+
+          // Dibuja límites visuales de la arena
+          this.graphics = this.add.graphics();
+          this.graphics.lineStyle(3, 0x3a3f4b, 1);
+          const pad = 20;
+          this.graphics.strokeRect(pad, pad, this.game.config.width - pad*2, this.game.config.height - pad*2);
+
+          // Controles
+          this.cursors = this.input.keyboard.createCursorKeys();
+          this.W = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+          this.A = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+          this.S = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+          this.D = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+          this.space = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+
+          // Conectar cuando el usuario pulse "Entrar"
+          const startBtn = document.getElementById("startBtn");
+          startBtn.onclick = () => {
+            const chosen = document.getElementById("character").value || "knight";
+            document.getElementById("ui").style.display = "none";
+            this.connectAndStart(chosen);
+          };
+        }
+
+        connectAndStart(chosenCharacter) {
+          socket = new WebSocket("ws://172.24.5.11:8080");
+
+          socket.onopen = () => {
+            // Enviar selección de personaje al conectar
+            socket.send(JSON.stringify({ type: "select", character: chosenCharacter }));
+          };
+
+          socket.onmessage = (msg) => {
+            const data = JSON.parse(msg.data);
+
+            if (data.type === "init") {
+              playerId = data.id;
+              renderHUD();
+              if (data.arena) arena = data.arena;
+
+              // Crear todos los ya conectados
+              Object.keys(data.players).forEach((id) => {
+                const p = data.players[id];
+                if (!p.character) return; // puede que aún no haya seleccionado
+                this.spawnOrUpdate(id, p.x, p.y, p.character, p.hp ?? 100);
+              });
+
+            } else if (data.type === "spawn") {
+              // Nuevo jugador con personaje
+              const s = data.state;
+              this.spawnOrUpdate(data.id, s.x, s.y, s.character, s.hp ?? 100);
+              renderHUD();
+
+            } else if (data.type === "update") {
+              const unit = players[data.id];
+              if (!unit) return;
+              unit.x = data.position.x;
+              unit.y = data.position.y;
+              this.updateHpBarPos(data.id);
+              renderHUD();
+
+            } else if (data.type === "damage") {
+              const unit = players[data.id];
+              if (!unit) return;
+              // Actualizar hp bar
+              this.setHp(data.id, data.hp);
+              renderHUD();
+
+              // Feedback visual ligero
+              unit.setTintFill(0xff6666);
+              this.time.delayedCall(120, () => unit.clearTint());
+
+            } else if (data.type === "dead") {
+  const unit = players[data.id];
+  if (!unit) return;
+
+  // Respawn
+  unit.x = data.respawn.x;
+  unit.y = data.respawn.y;
+  this.setHp(data.id, data.respawn.hp);
+  this.updateHpBarPos(data.id);
+
+  // Sonido de muerte
+  this.sfxDeath.play();
+} else if (data.type === "remove") {
+              this.removePlayer(data.id);
+            }
+          };
+
+          socket.onclose = () => {
+            // Si lo deseas, mostrar overlay para reconectar, etc.
+            console.log("Conexión cerrada");
+          };
+        }
+
+        // Crear o actualizar sprite + barra de vida
+        spawnOrUpdate(id, x, y, character, hp = 100) {
+          if (!players[id]) {
+            const sprite = this.add.sprite(x, y, character);
+            sprite.setOrigin(0.5, 0.5);
+            sprite.setDisplaySize(60, 60); // ajustar al tamaño de tus assets
+            players[id] = sprite;
+
+            // Crear barra de vida DOM por simplicidad (si prefieres, usa Graphics)
+            const wrap = document.createElement("div");
+            wrap.className = "hpbar";
+            const fill = document.createElement("div");
+            fill.className = "hpfill";
+            wrap.appendChild(fill);
+            document.body.appendChild(wrap);
+            hpBars[id] = { wrap, fill, max: 100 };
+            this.setHp(id, hp);
+            this.updateHpBarPos(id);
+          } else {
+            players[id].setTexture(character);
+            players[id].x = x;
+            players[id].y = y;
+            this.setHp(id, hp);
+            this.updateHpBarPos(id);
+          }
+        }
+
+        setHp(id, hp) {
+          const bar = hpBars[id];
+          if (!bar) return;
+          const pct = Math.max(0, Math.min(1, hp / (bar.max || 100)));
+          bar.fill.style.width = (pct * 40) + "px";
+          bar.fill.style.background = pct > 0.5 ? "#30d158" : pct > 0.25 ? "#ffd60a" : "#ff453a";
+        }
+
+        updateHpBarPos(id) {
+          const unit = players[id];
+          const bar = hpBars[id];
+          if (!unit || !bar) return;
+
+          // Convertir coordenadas del juego a pantalla
+          const worldPoint = new Phaser.Math.Vector2(unit.x, unit.y);
+          const cam = this.cameras.main;
+          const screenX = unit.x - cam.worldView.x;
+          const screenY = unit.y - cam.worldView.y;
+
+          bar.wrap.style.left = (screenX - 20) + "px";
+          bar.wrap.style.top = (screenY - 34) + "px";
+        }
+
+        removePlayer(id) {
+          if (players[id]) { players[id].destroy(); delete players[id]; }
+          if (hpBars[id]) { hpBars[id].wrap.remove(); delete hpBars[id]; }
+        }
+
+        update() {
+          // Si aún no tengo mi sprite, no hago nada
+          if (!playerId || !players[playerId]) return;
+
+          // Movimiento con teclado WASD o flechas
+          const me = players[playerId];
+          const speed = 2.2;
+          let moved = false;
+          let nx = me.x, ny = me.y;
+
+          if (this.cursors.left.isDown || this.A.isDown)  { nx -= speed; moved = true; }
+          if (this.cursors.right.isDown || this.D.isDown) { nx += speed; moved = true; }
+          if (this.cursors.up.isDown || this.W.isDown)    { ny -= speed; moved = true; }
+          if (this.cursors.down.isDown || this.S.isDown)  { ny += speed; moved = true; }
+
+          // Límites de arena (también hay clamp en el servidor)
+          const pad = arena.padding ?? 20;
+          nx = Phaser.Math.Clamp(nx, pad, (arena.width ?? 800) - pad);
+          ny = Phaser.Math.Clamp(ny, pad, (arena.height ?? 600) - pad);
+
+          if (moved) {
+            me.x = nx; me.y = ny;
+            this.updateHpBarPos(playerId);
+            socket && socket.readyState === WebSocket.OPEN &&
+              socket.send(JSON.stringify({ type: "move", position: { x: nx, y: ny } }));
+          }
+
+          // Ataque
+          if (Phaser.Input.Keyboard.JustDown(this.space)) {
+  // Animación local
+  me.setTint(0x99ccff);
+  this.time.delayedCall(80, () => me.clearTint());
+
+  // Sonido ataque local
+  this.sfxAttack.play();
+
+  // Avisar al servidor
+  socket && socket.readyState === WebSocket.OPEN &&
+    socket.send(JSON.stringify({ type: "attack" }));
+}
+        }
+      }
+
+      const config = {
+  type: Phaser.AUTO,
+  width: window.innerWidth,
+  height: window.innerHeight,
+  scene: GameScene,
+  scale: {
+    mode: Phaser.Scale.RESIZE,   // Se adapta al tamaño de ventana
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  }
+};
+new Phaser.Game(config);
+    </script>
+  </body>
+</html>
