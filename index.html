@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>Juego Multijugador Phaser</title>
+    <!-- Phaser 3.x (mantengo 3.55.2 como tu base) -->
     <script src="https://cdn.jsdelivr.net/npm/phaser@3.55.2/dist/phaser.js"></script>
     <style>
       body { margin: 0; background: #0b0d12; font-family: system-ui, sans-serif; }
@@ -41,73 +42,72 @@
         <h1>Elige tu personaje</h1>
         <label for="character">Personaje</label>
         <select id="character">
-          <option value="rock">The Rock</option>
-          <option value="undertaker">Undertaker</option>
-          <option value="shamous">Shamous</option>
-          <option value="cena">John Cena</option>
-          <option value="edge">Edge</option>
-          <option value="tripleh">TripleH</option>
+          <option value="mario">Mario</option>
+          <!-- Si luego activas más, agrégalos aquí -->
+          <!-- <option value="rock">The Rock</option> -->
         </select>
         <button id="startBtn">Entrar a la arena</button>
       </div>
     </div>
 
-    <div id="hud">WASD / Flechas para moverte · Barra espaciadora para atacar</div>
+    <div id="hud">Vidas: 2 · WASD/Flechas para moverte · Barra para atacar</div>
 
     <script>
+      // ======== Config anim / sprites ========
+      // Ajusta al tamaño REAL de cada frame en tus PNG:
+      const FRAME_W = 45;
+      const FRAME_H = 80;
+
+      // Cantidad de frames por anim de Mario (según indicación: 4/4/4)
+      const MARIO_FRAMES = { idle: 4, run: 4, attack: 4 };
+
+      // ======== Estado UI / Juego ========
       let socket;
       let playerId;
       let myLives = 2;
-      const players = {};
-      const hud = document.getElementById("hud"); // "WASD..." ya existe
-function renderHUD() {
-  hud.textContent = `Vidas: ${myLives} · WASD/Flechas para moverte · Barra para atacar`;
-}
-      const hpBars = {}; // id -> {wrapper, fill}
+      const players = {};     // id -> Phaser.Sprite
+      const hpBars = {};      // id -> {wrapper, fill}
       let arena = { width: 800, height: 600, padding: 20 };
+      const hud = document.getElementById("hud");
 
+      function renderHUD() {
+        hud.textContent = `Vidas: ${myLives} · WASD/Flechas para moverte · Barra para atacar`;
+      }
+
+      // ======== Escena principal ========
       class GameScene extends Phaser.Scene {
         constructor() { super("GameScene"); }
 
         preload() {
-          // Sprites (coloca tus archivos en /assets/)
-         // this.load.image("knight", "assets/knight.png");
-          //this.load.image("wizard", "assets/wizard.png");
-          //this.load.image("archer", "assets/archer.png");
+          // Fondo / audio
+          this.load.image("fondo", "assets/background.png");
+          this.load.audio("bgm", "assets/background.mp3");
+          this.load.audio("attack", "assets/attack.wav");
+          this.load.audio("death", "assets/death.wav");
 
-            this.load.image("rock", "assets/rock.png");
-            this.load.image("cena", "assets/cena.png");
-            this.load.image("edge", "assets/edge.png");
-            this.load.image("shamous", "assets/sheamus.png");
-            this.load.image("bayley", "assets/bayley.png");
-            this.load.image("undertaker", "assets/undertaker.png");
-            this.load.image("tripleh", "assets/tripleh.png");
-
-            // Música y efectos
-            this.load.audio("bgm", "assets/background.mp3");
-            this.load.audio("attack", "assets/attack.wav");
-            this.load.audio("death", "assets/death.wav");
-            this.load.image("fondo", "assets/background.png");
+          // === Mario: tiras horizontales (una por animación) ===
+          // Coloca los archivos exactamente con estos nombres/rutas:
+          // - assets/Mario_idle.png
+          // - assets/Mario_run.png
+          // - assets/Mario_attack.png
+          this.load.spritesheet("mario_idle",   "assets/Mario_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("mario_run",    "assets/Mario_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("mario_attack", "assets/Mario_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
         }
 
         create() {
-
-          // Agregar fondo que cubra toda la pantalla
-  this.bg = this.add.image(0, 0, "fondo").setOrigin(0);
-  this.bg.setDisplaySize(this.sys.game.config.width, this.sys.game.config.height);
-  
-          // Fondo simple
+          // Fondo escalado a pantalla
+          const bg = this.add.image(0, 0, "fondo").setOrigin(0);
+          bg.setDisplaySize(this.sys.game.config.width, this.sys.game.config.height);
           this.cameras.main.setBackgroundColor("#0b0d12");
 
-          // Música
+          // Música / FX
           const bgm = this.sound.add("bgm", { loop: true, volume: 0.35 });
           bgm.play();
+          this.sfxAttack = this.sound.add("attack", { volume: 0.7 });
+          this.sfxDeath = this.sound.add("death", { volume: 0.9 });
 
-          // Efectos
-  this.sfxAttack = this.sound.add("attack", { volume: 0.7 });
-  this.sfxDeath = this.sound.add("death", { volume: 0.9 });
-
-          // Dibuja límites visuales de la arena
+          // Marco de arena visual
           this.graphics = this.add.graphics();
           this.graphics.lineStyle(3, 0x3a3f4b, 1);
           const pad = 20;
@@ -121,20 +121,52 @@ function renderHUD() {
           this.D = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
           this.space = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-          // Conectar cuando el usuario pulse "Entrar"
-          const startBtn = document.getElementById("startBtn");
-          startBtn.onclick = () => {
-            const chosen = document.getElementById("character").value || "knight";
+          // Construir animaciones de Mario (baseKey = "mario")
+          this.buildSideAnims("mario", MARIO_FRAMES);
+
+          // Entrar a la arena cuando presionen el botón
+          document.getElementById("startBtn").onclick = () => {
+            const chosen = document.getElementById("character").value || "mario";
             document.getElementById("ui").style.display = "none";
             this.connectAndStart(chosen);
           };
         }
 
+        // Crea animaciones laterales a partir de tiras horizontales (idle/run/attack)
+        buildSideAnims(baseKey, framesCfg) {
+          // baseKey = "mario" → hojas: "mario_idle", "mario_run", "mario_attack"
+          if (!this.anims.exists(`${baseKey}_idle_side`)) {
+            this.anims.create({
+              key: `${baseKey}_idle_side`,
+              frames: this.anims.generateFrameNumbers(`${baseKey}_idle`, { start: 0, end: framesCfg.idle - 1 }),
+              frameRate: 7,
+              repeat: -1
+            });
+          }
+          if (!this.anims.exists(`${baseKey}_run_side`)) {
+            this.anims.create({
+              key: `${baseKey}_run_side`,
+              frames: this.anims.generateFrameNumbers(`${baseKey}_run`, { start: 0, end: framesCfg.run - 1 }),
+              frameRate: 12,
+              repeat: -1
+            });
+          }
+          if (!this.anims.exists(`${baseKey}_attack_side`)) {
+            this.anims.create({
+              key: `${baseKey}_attack_side`,
+              frames: this.anims.generateFrameNumbers(`${baseKey}_attack`, { start: 0, end: framesCfg.attack - 1 }),
+              frameRate: 12,
+              repeat: 0
+            });
+          }
+        }
+
         connectAndStart(chosenCharacter) {
-          socket = new WebSocket("ws://172.24.5.11:8080");
+          // === Ajusta la URL del servidor WS a la tuya ===
+          socket = new WebSocket("ws://localhost:8080");
 
           socket.onopen = () => {
-            // Enviar selección de personaje al conectar
+            // Enviamos selección (p.ej. "mario")
             socket.send(JSON.stringify({ type: "select", character: chosenCharacter }));
           };
 
@@ -146,15 +178,14 @@ function renderHUD() {
               renderHUD();
               if (data.arena) arena = data.arena;
 
-              // Crear todos los ya conectados
+              // Crear todos los conectados
               Object.keys(data.players).forEach((id) => {
                 const p = data.players[id];
-                if (!p.character) return; // puede que aún no haya seleccionado
+                if (!p.character) return;
                 this.spawnOrUpdate(id, p.x, p.y, p.character, p.hp ?? 100);
               });
 
             } else if (data.type === "spawn") {
-              // Nuevo jugador con personaje
               const s = data.state;
               this.spawnOrUpdate(data.id, s.x, s.y, s.character, s.hp ?? 100);
               renderHUD();
@@ -170,46 +201,49 @@ function renderHUD() {
             } else if (data.type === "damage") {
               const unit = players[data.id];
               if (!unit) return;
-              // Actualizar hp bar
               this.setHp(data.id, data.hp);
               renderHUD();
-
-              // Feedback visual ligero
               unit.setTintFill(0xff6666);
               this.time.delayedCall(120, () => unit.clearTint());
 
             } else if (data.type === "dead") {
-  const unit = players[data.id];
-  if (!unit) return;
+              const unit = players[data.id];
+              if (!unit) return;
+              unit.x = data.respawn.x;
+              unit.y = data.respawn.y;
+              this.setHp(data.id, data.respawn.hp);
+              this.updateHpBarPos(data.id);
+              this.sfxDeath.play();
 
-  // Respawn
-  unit.x = data.respawn.x;
-  unit.y = data.respawn.y;
-  this.setHp(data.id, data.respawn.hp);
-  this.updateHpBarPos(data.id);
-
-  // Sonido de muerte
-  this.sfxDeath.play();
-} else if (data.type === "remove") {
+            } else if (data.type === "remove") {
               this.removePlayer(data.id);
             }
           };
 
           socket.onclose = () => {
-            // Si lo deseas, mostrar overlay para reconectar, etc.
             console.log("Conexión cerrada");
           };
         }
 
-        // Crear o actualizar sprite + barra de vida
+        // Crea/actualiza el sprite animado y su barra de vida
         spawnOrUpdate(id, x, y, character, hp = 100) {
+          // character esperado: "mario"
+          const baseKey = character; // si agregas más, conservar mismo naming
           if (!players[id]) {
-            const sprite = this.add.sprite(x, y, character);
+            // Sprite: usa cualquier textura de la tira; luego se reemplaza con anim
+            const sprite = this.add.sprite(x, y, `${baseKey}_idle`, 0);
             sprite.setOrigin(0.5, 0.5);
-            sprite.setDisplaySize(60, 60); // ajustar al tamaño de tus assets
+            sprite.setScale(1); // Escala uniforme (cambia si necesitas)
+            sprite.state = {
+              charKey: baseKey,        // "mario"
+              lastMoveH: 'right',      // 'left' | 'right'
+              attacking: false
+            };
+            // Animación por defecto
+            sprite.play(`${baseKey}_idle_side`);
             players[id] = sprite;
 
-            // Crear barra de vida DOM por simplicidad (si prefieres, usa Graphics)
+            // Barra de vida DOM
             const wrap = document.createElement("div");
             wrap.className = "hpbar";
             const fill = document.createElement("div");
@@ -220,9 +254,13 @@ function renderHUD() {
             this.setHp(id, hp);
             this.updateHpBarPos(id);
           } else {
-            players[id].setTexture(character);
-            players[id].x = x;
-            players[id].y = y;
+            const s = players[id];
+            if (s.state.charKey !== baseKey) {
+              // Si el server cambiara de personaje, rearmar anims
+              s.state.charKey = baseKey;
+              s.play(`${baseKey}_idle_side`, true);
+            }
+            s.x = x; s.y = y;
             this.setHp(id, hp);
             this.updateHpBarPos(id);
           }
@@ -241,14 +279,12 @@ function renderHUD() {
           const bar = hpBars[id];
           if (!unit || !bar) return;
 
-          // Convertir coordenadas del juego a pantalla
-          const worldPoint = new Phaser.Math.Vector2(unit.x, unit.y);
           const cam = this.cameras.main;
           const screenX = unit.x - cam.worldView.x;
           const screenY = unit.y - cam.worldView.y;
 
           bar.wrap.style.left = (screenX - 20) + "px";
-          bar.wrap.style.top = (screenY - 34) + "px";
+          bar.wrap.style.top  = (screenY - 34) + "px";
         }
 
         removePlayer(id) {
@@ -257,59 +293,92 @@ function renderHUD() {
         }
 
         update() {
-          // Si aún no tengo mi sprite, no hago nada
           if (!playerId || !players[playerId]) return;
 
-          // Movimiento con teclado WASD o flechas
           const me = players[playerId];
           const speed = 2.2;
-          let moved = false;
-          let nx = me.x, ny = me.y;
+          let dx = 0, dy = 0;
 
-          if (this.cursors.left.isDown || this.A.isDown)  { nx -= speed; moved = true; }
-          if (this.cursors.right.isDown || this.D.isDown) { nx += speed; moved = true; }
-          if (this.cursors.up.isDown || this.W.isDown)    { ny -= speed; moved = true; }
-          if (this.cursors.down.isDown || this.S.isDown)  { ny += speed; moved = true; }
-
-          // Límites de arena (también hay clamp en el servidor)
-          const pad = arena.padding ?? 20;
-          nx = Phaser.Math.Clamp(nx, pad, (arena.width ?? 800) - pad);
-          ny = Phaser.Math.Clamp(ny, pad, (arena.height ?? 600) - pad);
-
-          if (moved) {
-            me.x = nx; me.y = ny;
-            this.updateHpBarPos(playerId);
-            socket && socket.readyState === WebSocket.OPEN &&
-              socket.send(JSON.stringify({ type: "move", position: { x: nx, y: ny } }));
+          // Bloquear movimiento si está atacando (opcional)
+          if (!me.state.attacking) {
+            if (this.cursors.left.isDown || this.A.isDown)  { dx -= speed; me.state.lastMoveH = 'left'; }
+            if (this.cursors.right.isDown || this.D.isDown) { dx += speed; me.state.lastMoveH = 'right'; }
+            if (this.cursors.up.isDown || this.W.isDown)    { dy -= speed; }
+            if (this.cursors.down.isDown || this.S.isDown)  { dy += speed; }
           }
 
-          // Ataque
-          if (Phaser.Input.Keyboard.JustDown(this.space)) {
-  // Animación local
-  me.setTint(0x99ccff);
-  this.time.delayedCall(80, () => me.clearTint());
+          const moving = dx !== 0 || dy !== 0;
+          if (moving) {
+            // Límites arena
+            const pad = arena.padding ?? 20;
+            me.x = Phaser.Math.Clamp(me.x + dx, pad, (arena.width ?? 800) - pad);
+            me.y = Phaser.Math.Clamp(me.y + dy, pad, (arena.height ?? 600) - pad);
+            this.updateHpBarPos(playerId);
 
-  // Sonido ataque local
-  this.sfxAttack.play();
+            // Enviar movimiento al servidor
+            socket && socket.readyState === WebSocket.OPEN &&
+              socket.send(JSON.stringify({ type: "move", position: { x: me.x, y: me.y } }));
+          }
 
-  // Avisar al servidor
-  socket && socket.readyState === WebSocket.OPEN &&
-    socket.send(JSON.stringify({ type: "attack" }));
-}
+          // Reproducir anim de movimiento/idle (vertical usa lateral)
+          const k = me.state.charKey;
+          if (!me.state.attacking) {
+            if (moving) me.play(`${k}_run_side`, true);
+            else        me.play(`${k}_idle_side`, true);
+            me.setFlipX(me.state.lastMoveH === 'left');
+          }
+
+          // Ataque (espacio)
+          if (Phaser.Input.Keyboard.JustDown(this.space) && !me.state.attacking) {
+            this.doAttack(me);
+          }
+        }
+
+        doAttack(me) {
+          const k = me.state.charKey;
+          me.state.attacking = true;
+          me.setFlipX(me.state.lastMoveH === 'left'); // orientar
+
+          // Sonido + efecto visual leve
+          this.sfxAttack && this.sfxAttack.play();
+          me.setTint(0x99ccff);
+
+          // Reproducir anim de ataque (no loop)
+          me.play(`${k}_attack_side`, true);
+
+          // Al completar la animación, volver a idle/run
+          me.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+            me.clearTint();
+            me.state.attacking = false;
+
+            if (this.cursors.left.isDown || this.A.isDown ||
+                this.cursors.right.isDown || this.D.isDown ||
+                this.cursors.up.isDown || this.W.isDown ||
+                this.cursors.down.isDown || this.S.isDown) {
+              me.play(`${k}_run_side`, true);
+            } else {
+              me.play(`${k}_idle_side`, true);
+            }
+          });
+
+          // Avisar al servidor el ataque
+          socket && socket.readyState === WebSocket.OPEN &&
+            socket.send(JSON.stringify({ type: "attack" }));
         }
       }
 
+      // ======== Boot del juego con escala responsive ========
       const config = {
-  type: Phaser.AUTO,
-  width: window.innerWidth,
-  height: window.innerHeight,
-  scene: GameScene,
-  scale: {
-    mode: Phaser.Scale.RESIZE,   // Se adapta al tamaño de ventana
-    autoCenter: Phaser.Scale.CENTER_BOTH
-  }
-};
-new Phaser.Game(config);
+        type: Phaser.AUTO,
+        width: window.innerWidth,
+        height: window.innerHeight,
+        scene: GameScene,
+        scale: {
+          mode: Phaser.Scale.RESIZE,
+          autoCenter: Phaser.Scale.CENTER_BOTH
+        }
+      };
+      new Phaser.Game(config);
     </script>
   </body>
 </html>
