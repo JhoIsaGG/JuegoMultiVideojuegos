@@ -76,8 +76,8 @@
       // ===== Selección de personajes =====
       const characters = [
         { key: "mario", name: "Mario", img: "assets/Mario_idle.png" },
-        // Agrega más aquí
-        // { key: "rock", name: "The Rock", img: "assets/Rock_idle.png" }
+        { key: "andrea", name: "Andrea", img: "assets/andrea_idle.png" },
+
       ];
       let currentIndex = 0;
       const ui = document.getElementById("ui");
@@ -125,6 +125,9 @@
           this.load.spritesheet("mario_idle",   "assets/Mario_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
           this.load.spritesheet("mario_run",    "assets/Mario_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
           this.load.spritesheet("mario_attack", "assets/Mario_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("andrea_idle",   "assets/andrea_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("andrea_run",    "assets/andrea_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("andrea_attack", "assets/andrea_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
         }
         create() {
           const bg = this.add.image(0, 0, "fondo").setOrigin(0);
@@ -149,6 +152,7 @@
           this.space = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
           this.buildSideAnims("mario", MARIO_FRAMES);
+          this.buildSideAnims("andrea", MARIO_FRAMES);
         }
 
         buildSideAnims(baseKey, framesCfg) {
@@ -277,8 +281,11 @@
           const moving = dx !== 0 || dy !== 0;
           if (moving) {
             const pad = arena.padding ?? 20;
-            me.x = Phaser.Math.Clamp(me.x + dx, pad, (arena.width ?? 800) - pad);
-            me.y = Phaser.Math.Clamp(me.y + dy, pad, (arena.height ?? 600) - pad);
+            const maxW = this.game.config.width - pad;
+            const maxH = this.game.config.height - pad;
+
+            me.x = Phaser.Math.Clamp(me.x + dx, pad, maxW);
+            me.y = Phaser.Math.Clamp(me.y + dy, pad, maxH);
             this.updateHpBarPos(playerId);
             socket && socket.readyState === WebSocket.OPEN &&
               socket.send(JSON.stringify({ type: "move", position: { x: me.x, y: me.y } }));

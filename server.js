@@ -27,7 +27,7 @@ const server = new WebSocket.Server({
  * }
  */
 let players = {};
-const ARENA = { width: 1935, height: 1300, padding: 200 };
+const ARENA = { width: 1935, height: 1300, padding: 150 };
 const MOVE_CLAMP = (v, min, max) => Math.max(min, Math.min(max, v));
 const ATTACK_RANGE = 50;
 const ATTACK_COOLDOWN_MS = 500;
