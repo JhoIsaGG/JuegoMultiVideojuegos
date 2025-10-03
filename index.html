@@ -77,6 +77,7 @@
       const characters = [
         { key: "mario", name: "Mario", img: "assets/Mario_idle.png" },
         { key: "andrea", name: "Andrea", img: "assets/andrea_idle.png" },
+        { key: "Enma", name: "Emma", img: "assets/Enma_idle.png" }
 
       ];
       let currentIndex = 0;
@@ -128,6 +129,9 @@
           this.load.spritesheet("andrea_idle",   "assets/andrea_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
           this.load.spritesheet("andrea_run",    "assets/andrea_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
           this.load.spritesheet("andrea_attack", "assets/andrea_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("Enma_idle",   "assets/Enma_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("Enma_run",    "assets/Enma_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("Enma_attack", "assets/Enma_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
         }
         create() {
           const bg = this.add.image(0, 0, "fondo").setOrigin(0);
@@ -153,6 +157,7 @@
 
           this.buildSideAnims("mario", MARIO_FRAMES);
           this.buildSideAnims("andrea", MARIO_FRAMES);
+          this.buildSideAnims("Enma", MARIO_FRAMES);
         }
 
         buildSideAnims(baseKey, framesCfg) {
