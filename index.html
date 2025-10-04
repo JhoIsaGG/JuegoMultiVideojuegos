@@ -77,8 +77,9 @@
       const characters = [
         { key: "mario", name: "Mario", img: "assets/Mario_idle.png" },
         { key: "andrea", name: "Andrea", img: "assets/andrea_idle.png" },
-        { key: "Enma", name: "Emma", img: "assets/Enma_idle.png" }
-
+        { key: "Enma", name: "Emma", img: "assets/Enma_idle.png" },
+        { key: "Elian", name: "Elian", img: "assets/Elian_idle.png" },
+        { key: "Oscar", name: "Oscar", img: "assets/Oscar_idle.png" }
       ];
       let currentIndex = 0;
       const ui = document.getElementById("ui");
@@ -132,6 +133,12 @@
           this.load.spritesheet("Enma_idle",   "assets/Enma_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
           this.load.spritesheet("Enma_run",    "assets/Enma_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
           this.load.spritesheet("Enma_attack", "assets/Enma_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("Oscar_idle",   "assets/Oscar_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("Oscar_run",    "assets/Oscar_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("Oscar_attack", "assets/Oscar_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("Elian_idle",   "assets/Elian_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("Elian_run",    "assets/Elian_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          this.load.spritesheet("Elian_attack", "assets/Elian_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
         }
         create() {
           const bg = this.add.image(0, 0, "fondo").setOrigin(0);
@@ -158,6 +165,8 @@
           this.buildSideAnims("mario", MARIO_FRAMES);
           this.buildSideAnims("andrea", MARIO_FRAMES);
           this.buildSideAnims("Enma", MARIO_FRAMES);
+          this.buildSideAnims("Elian", MARIO_FRAMES);
+          this.buildSideAnims("Oscar", MARIO_FRAMES);
         }
 
         buildSideAnims(baseKey, framesCfg) {
