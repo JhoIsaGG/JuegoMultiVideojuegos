@@ -7,7 +7,6 @@
     <style>
       body { margin: 0; background: #0b0d12; font-family: system-ui, sans-serif; }
 
-      /* Pantalla de selección */
       #ui {
         position: absolute; inset: 0; display: grid; place-items: center;
         background: rgba(0,0,0,.85); z-index: 10; color: #fff;
@@ -18,10 +17,10 @@
         text-shadow: 4px 4px 10px black; font-weight: bold;
       }
       #titleLogo {
-    width: 400px; max-width: 80%;
-    margin-bottom: 20px;
-    filter: drop-shadow(4px 4px 10px black);
-  }
+        width: 400px; max-width: 80%;
+        margin-bottom: 20px;
+        filter: drop-shadow(4px 4px 10px black);
+      }
       #charPreview img {
         width: 150px; height: auto; image-rendering: pixelated;
       }
@@ -30,7 +29,6 @@
       }
       .hint { margin-top: 16px; font-size: 14px; opacity: 0.7; }
 
-      /* HUD y barras de vida */
       #hud {
         position: absolute; top: 10px; left: 10px; z-index: 5; color: #e6edf3;
         background: rgba(0,0,0,.35); padding: 6px 10px; border-radius: 8px; font-size: 12px;
@@ -43,37 +41,32 @@
     </style>
   </head>
   <body>
-    <!-- Pantalla de selección -->
     <div id="ui">
-  <div id="characterSelect">
-    <!-- Título ahora es imagen -->
-    <img id="titleLogo" src="assets/smackdown.png" alt="Smackdown" />
-    <div id="charPreview">
-      <img id="charImage" src="assets/Mario_idle.png" alt="personaje" />
-      <h2 id="charName">Mario</h2>
+      <div id="characterSelect">
+        <img id="titleLogo" src="assets/smackdown.png" alt="Smackdown" />
+        <div id="charPreview">
+          <img id="charImage" src="assets/Mario_idle.png" alt="personaje" />
+          <h2 id="charName">Mario</h2>
+        </div>
+        <p class="hint">Usa A/D para cambiar · Enter para entrar</p>
+      </div>
     </div>
-    <p class="hint">Usa A/D para cambiar · Enter para entrar</p>
-  </div>
-</div>
 
-    <!-- HUD en partida -->
-    <div id="hud">Vidas: 2 · WASD/Flechas para moverte · Barra para atacar</div>
+    <div id="hud">Vidas: 2 · WASD/Flechas para moverte · Barra para atacar · R para curarte</div>
 
     <script>
-      // ===== Configuración de sprites =====
       const FRAME_W = 45, FRAME_H = 80;
       const MARIO_FRAMES = { idle: 4, run: 4, attack: 4 };
 
-      // ===== Estado global =====
       let socket, playerId, myLives = 2;
       const players = {}, hpBars = {};
       let arena = { width: 800, height: 600, padding: 20 };
       const hud = document.getElementById("hud");
+
       function renderHUD() {
-        hud.textContent = `Vidas: ${myLives} · WASD/Flechas para moverte · Barra para atacar`;
+        hud.textContent = `Vidas: ${myLives} · WASD/Flechas para moverte · Barra para atacar · R para curarte`;
       }
 
-      // ===== Selección de personajes =====
       const characters = [
         { key: "mario", name: "Mario", img: "assets/Mario_idle.png" },
         { key: "andrea", name: "Andrea", img: "assets/andrea_idle.png" },
@@ -91,28 +84,30 @@
         charName.textContent = characters[currentIndex].name;
       }
 
-          document.addEventListener("keydown", (e) => {
-      if (ui.style.display !== "none") {
-        if (e.code === "KeyA") {
-          currentIndex = (currentIndex - 1 + characters.length) % characters.length;
-          updateCharacter();
-          game.scene.keys["GameScene"].sound.play("change"); // 🔊 sonido cambio
+      document.addEventListener("keydown", (e) => {
+        if (ui.style.display !== "none") {
+          if (e.code === "KeyA") {
+            currentIndex = (currentIndex - 1 + characters.length) % characters.length;
+            updateCharacter();
+            game.scene.keys["GameScene"].sound.play("change");
+          }
+          if (e.code === "KeyD") {
+            currentIndex = (currentIndex + 1) % characters.length;
+            updateCharacter();
+            game.scene.keys["GameScene"].sound.play("change");
+          }
+          if (e.code === "Enter") {
+            const chosen = characters[currentIndex].key;
+            game.scene.keys["GameScene"].sound.play("in");
+            ui.style.display = "none";
+            game.scene.keys["GameScene"].connectAndStart(chosen);
+          }
         }
-        if (e.code === "KeyD") {
-          currentIndex = (currentIndex + 1) % characters.length;
-          updateCharacter();
-          game.scene.keys["GameScene"].sound.play("change"); // 🔊 sonido cambio
-        }
-        if (e.code === "Enter") {
-          const chosen = characters[currentIndex].key;
-          game.scene.keys["GameScene"].sound.play("in"); // 🔊 sonido entrar
-          ui.style.display = "none";
-          game.scene.keys["GameScene"].connectAndStart(chosen);
-        }
-      }
-    });
+      });
 
-      // ===== Escena principal =====
+      let hasUsedHeal = false;
+      let isHealing = false;
+
       class GameScene extends Phaser.Scene {
         constructor() { super("GameScene"); }
         preload() {
@@ -123,23 +118,20 @@
           this.load.audio("change", "assets/change.wav");
           this.load.audio("in", "assets/in.wav");
 
+          // Animación de curación
+          this.load.spritesheet("heal_anim", "assets/heal_anim.png", {
+            frameWidth: FRAME_W,
+            frameHeight: FRAME_H
+          });
 
-          this.load.spritesheet("mario_idle",   "assets/Mario_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("mario_run",    "assets/Mario_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("mario_attack", "assets/Mario_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("andrea_idle",   "assets/andrea_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("andrea_run",    "assets/andrea_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("andrea_attack", "assets/andrea_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("Enma_idle",   "assets/Enma_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("Enma_run",    "assets/Enma_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("Enma_attack", "assets/Enma_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("Oscar_idle",   "assets/Oscar_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("Oscar_run",    "assets/Oscar_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("Oscar_attack", "assets/Oscar_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("Elian_idle",   "assets/Elian_idle.png",   { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("Elian_run",    "assets/Elian_run.png",    { frameWidth: FRAME_W, frameHeight: FRAME_H });
-          this.load.spritesheet("Elian_attack", "assets/Elian_attack.png", { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          const chars = ["mario", "andrea", "Enma", "Elian", "Oscar"];
+          chars.forEach((c) => {
+            this.load.spritesheet(`${c}_idle`, `assets/${c}_idle.png`, { frameWidth: FRAME_W, frameHeight: FRAME_H });
+            this.load.spritesheet(`${c}_run`, `assets/${c}_run.png`, { frameWidth: FRAME_W, frameHeight: FRAME_H });
+            this.load.spritesheet(`${c}_attack`, `assets/${c}_attack.png`, { frameWidth: FRAME_W, frameHeight: FRAME_H });
+          });
         }
+
         create() {
           const bg = this.add.image(0, 0, "fondo").setOrigin(0);
           bg.setDisplaySize(this.sys.game.config.width, this.sys.game.config.height);
@@ -153,20 +145,24 @@
           this.graphics = this.add.graphics();
           this.graphics.lineStyle(3, 0x3a3f4b, 1);
           const pad = 20;
-          this.graphics.strokeRect(pad, pad, this.game.config.width - pad*2, this.game.config.height - pad*2);
+          this.graphics.strokeRect(pad, pad, this.game.config.width - pad * 2, this.game.config.height - pad * 2);
 
           this.cursors = this.input.keyboard.createCursorKeys();
           this.W = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
           this.A = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
           this.S = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
           this.D = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+          this.R = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
           this.space = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-          this.buildSideAnims("mario", MARIO_FRAMES);
-          this.buildSideAnims("andrea", MARIO_FRAMES);
-          this.buildSideAnims("Enma", MARIO_FRAMES);
-          this.buildSideAnims("Elian", MARIO_FRAMES);
-          this.buildSideAnims("Oscar", MARIO_FRAMES);
+          ["mario", "andrea", "Enma", "Elian", "Oscar"].forEach(c => this.buildSideAnims(c, MARIO_FRAMES));
+
+          this.anims.create({
+            key: "heal_animation",
+            frames: this.anims.generateFrameNumbers("heal_anim", { start: 0, end: 2 }),
+            frameRate: 6,
+            repeat: -1
+          });
         }
 
         buildSideAnims(baseKey, framesCfg) {
@@ -195,9 +191,7 @@
 
         connectAndStart(chosenCharacter) {
           socket = new WebSocket("ws://172.24.4.195:8080");
-          socket.onopen = () => {
-            socket.send(JSON.stringify({ type: "select", character: chosenCharacter }));
-          };
+          socket.onopen = () => socket.send(JSON.stringify({ type: "select", character: chosenCharacter }));
           socket.onmessage = (msg) => {
             const data = JSON.parse(msg.data);
             if (data.type === "init") {
@@ -229,12 +223,18 @@
               if (!unit) return;
               unit.x = data.respawn.x; unit.y = data.respawn.y;
               this.setHp(data.id, data.respawn.hp);
+              myLives = data.respawn.lives;
+              renderHUD();
               this.updateHpBarPos(data.id); this.sfxDeath.play();
+            } else if (data.type === "healed") {
+              const unit = players[data.id];
+              if (!unit) return;
+              this.setHp(data.id, data.hp);
+              renderHUD();
             } else if (data.type === "remove") {
               this.removePlayer(data.id);
             }
           };
-          socket.onclose = () => console.log("Conexión cerrada");
         }
 
         spawnOrUpdate(id, x, y, character, hp = 100) {
@@ -261,12 +261,14 @@
             s.x = x; s.y = y; this.setHp(id, hp); this.updateHpBarPos(id);
           }
         }
+
         setHp(id, hp) {
           const bar = hpBars[id]; if (!bar) return;
           const pct = Math.max(0, Math.min(1, hp / (bar.max || 100)));
           bar.fill.style.width = (pct * 40) + "px";
           bar.fill.style.background = pct > 0.5 ? "#30d158" : pct > 0.25 ? "#ffd60a" : "#ff453a";
         }
+
         updateHpBarPos(id) {
           const unit = players[id]; const bar = hpBars[id];
           if (!unit || !bar) return;
@@ -276,6 +278,7 @@
           bar.wrap.style.left = (screenX - 20) + "px";
           bar.wrap.style.top  = (screenY - 34) + "px";
         }
+
         removePlayer(id) {
           if (players[id]) { players[id].destroy(); delete players[id]; }
           if (hpBars[id]) { hpBars[id].wrap.remove(); delete hpBars[id]; }
@@ -286,32 +289,61 @@
           const me = players[playerId], speed = 2.2;
           let dx = 0, dy = 0;
 
-          if (!me.state.attacking) {
+          if (!me.state.attacking && !isHealing) {
             if (this.cursors.left.isDown || this.A.isDown)  { dx -= speed; me.state.lastMoveH = 'left'; }
             if (this.cursors.right.isDown || this.D.isDown) { dx += speed; me.state.lastMoveH = 'right'; }
             if (this.cursors.up.isDown || this.W.isDown)    { dy -= speed; }
             if (this.cursors.down.isDown || this.S.isDown)  { dy += speed; }
           }
+
           const moving = dx !== 0 || dy !== 0;
           if (moving) {
             const pad = arena.padding ?? 20;
             const maxW = this.game.config.width - pad;
             const maxH = this.game.config.height - pad;
-
             me.x = Phaser.Math.Clamp(me.x + dx, pad, maxW);
             me.y = Phaser.Math.Clamp(me.y + dy, pad, maxH);
             this.updateHpBarPos(playerId);
             socket && socket.readyState === WebSocket.OPEN &&
               socket.send(JSON.stringify({ type: "move", position: { x: me.x, y: me.y } }));
           }
+
           const k = me.state.charKey;
-          if (!me.state.attacking) {
+          if (!me.state.attacking && !isHealing) {
             if (moving) me.play(`${k}_run_side`, true);
             else me.play(`${k}_idle_side`, true);
             me.setFlipX(me.state.lastMoveH === 'left');
           }
-          if (Phaser.Input.Keyboard.JustDown(this.space) && !me.state.attacking) {
+
+          if (Phaser.Input.Keyboard.JustDown(this.space) && !me.state.attacking && !isHealing) {
             this.doAttack(me);
+          }
+
+          // --- Curación (mantener R) ---
+          if (myLives === 1 && !hasUsedHeal && !isHealing && this.R.isDown) {
+            isHealing = true;
+            me.play("heal_animation", true);
+            const healDuration = 3000;
+            const healStart = this.time.now;
+
+            const healInterval = this.time.addEvent({
+              delay: 100,
+              callback: () => {
+                const elapsed = this.time.now - healStart;
+                if (!this.R.isDown) {
+                  healInterval.remove();
+                  isHealing = false;
+                  me.play(`${k}_idle_side`);
+                } else if (elapsed >= healDuration) {
+                  healInterval.remove();
+                  isHealing = false;
+                  hasUsedHeal = true;
+                  this.sound.play("in");
+                  socket.send(JSON.stringify({ type: "heal" }));
+                }
+              },
+              loop: true
+            });
           }
         }
 
@@ -324,21 +356,12 @@
           me.play(`${k}_attack_side`, true);
           me.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
             me.clearTint(); me.state.attacking = false;
-            if (this.cursors.left.isDown || this.A.isDown ||
-                this.cursors.right.isDown || this.D.isDown ||
-                this.cursors.up.isDown || this.W.isDown ||
-                this.cursors.down.isDown || this.S.isDown) {
-              me.play(`${k}_run_side`, true);
-            } else {
-              me.play(`${k}_idle_side`, true);
-            }
           });
           socket && socket.readyState === WebSocket.OPEN &&
             socket.send(JSON.stringify({ type: "attack" }));
         }
       }
 
-      // ===== Configuración del juego =====
       const config = {
         type: Phaser.AUTO,
         width: window.innerWidth, height: window.innerHeight,
