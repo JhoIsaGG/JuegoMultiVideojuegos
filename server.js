@@ -4,10 +4,8 @@ const WebSocket = require("ws");
 // --------- OPCIONES ---------
 // Si true: la PRIMERA IP que entra queda "baneada" para siempre (memoria) y no podrá reconectar.
 // Si false: solo se permite UNA conexión simultánea por IP (si se desconecta, la IP podrá volver a entrar).
-const PERMANENT_BLOCK_PER_IP = false;
+const PERMANENT_BLOCK_PER_IP = true;
 
-// Límite básico de mensajes entrantes por segundo por socket (anti-spam).
-const MAX_MSGS_PER_SEC = 40;
 
 // Intervalo de heartbeat (ping/pong) para limpiar clientes caídos.
 const HEARTBEAT_MS = 15000;
@@ -27,7 +25,7 @@ const server = new WebSocket.Server({
  * }
  */
 let players = {};
-const ARENA = { width: 1935, height: 1300, padding: 150 };
+const ARENA = { width: 1935, height: 1300, padding: 200 };
 const MOVE_CLAMP = (v, min, max) => Math.max(min, Math.min(max, v));
 const ATTACK_RANGE = 50;
 const ATTACK_COOLDOWN_MS = 500;
@@ -138,12 +136,6 @@ server.on("connection", (socket, req) => {
       socket._lastTick = now;
     }
     socket._msgCount++;
-    if (socket._msgCount > MAX_MSGS_PER_SEC) {
-      console.warn(`Socket ${playerId} excedió rate limit. Cerrando.`);
-      return denyAndClose(socket, "Rate limit excedido", 4003);
-    }
-    // ----------------------------------
-
     let data;
     try {
       data = JSON.parse(msg);

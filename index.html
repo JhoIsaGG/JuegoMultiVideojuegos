@@ -79,7 +79,7 @@
         { key: "andrea", name: "Andrea", img: "assets/andrea_idle.png" },
         { key: "Enma", name: "Emma", img: "assets/Enma_idle.png" },
         { key: "Elian", name: "Elian", img: "assets/Elian_idle.png" },
-        { key: "Oscar", name: "Oscar", img: "assets/Oscar_idle.png" }
+        { key: "Oscar", name: "Ismael", img: "assets/Oscar_idle.png" }
       ];
       let currentIndex = 0;
       const ui = document.getElementById("ui");
@@ -194,7 +194,7 @@
         }
 
         connectAndStart(chosenCharacter) {
-          socket = new WebSocket("ws://localhost:8080");
+          socket = new WebSocket("ws://172.24.4.195:8080");
           socket.onopen = () => {
             socket.send(JSON.stringify({ type: "select", character: chosenCharacter }));
           };
